@@ -25,8 +25,10 @@ const colors = {
 
   black: '#000',
   white: '#E6E6E6',
-  green: '#A2FAA3',
+  purple: '#6f84ff',
+  green: '#46e7b1',
   red: '#F93943',
+  orange: '#ffa26f',
 
   pureWhite: '#fff',
 
@@ -34,7 +36,7 @@ const colors = {
 
   overlay: 'rgba(24, 24, 24, .8)',
 
-  pageBackground: '#101010',
+  pageBackground: '#0b1419',
 
   grays: [
     '#121212',

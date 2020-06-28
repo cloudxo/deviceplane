@@ -12,7 +12,9 @@ import (
 var (
 	sshTimeoutFlag *int = &[]int{0}[0]
 
-	deviceArg *string = &[]string{""}[0]
+	deviceArg     *string = &[]string{""}[0]
+	connectionArg *string = &[]string{""}[0]
+	portArg               = &[]uint{0}[0]
 
 	deviceFilterListFlag *[]string = &[][]string{[]string{}}[0]
 
@@ -76,5 +78,17 @@ func addDeviceArg(cmd *kingpin.CmdClause) *kingpin.ArgClause {
 		}
 		return names
 	})
+	return arg
+}
+
+func addConnectionArg(cmd *kingpin.CmdClause) *kingpin.ArgClause {
+	arg := cmd.Arg("connection", "Connection name.").Required()
+	arg.StringVar(connectionArg)
+	return arg
+}
+
+func addPortArg(cmd *kingpin.CmdClause) *kingpin.ArgClause {
+	arg := cmd.Arg("port", "Local port.").Required()
+	arg.UintVar(portArg)
 	return arg
 }

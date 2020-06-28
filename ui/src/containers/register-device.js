@@ -3,7 +3,17 @@ import React, { useEffect, useState, useMemo } from 'react';
 import config from '../config';
 import Layout from '../components/layout';
 import Card from '../components/card';
-import { Label, Group, Text, Link, Code, Select } from '../components/core';
+import {
+  Row,
+  Label,
+  Group,
+  Text,
+  Link,
+  Code,
+  Select,
+  Button,
+  Icon,
+} from '../components/core';
 
 const getLocalCommand = ({ id, projectId }) =>
   [
@@ -32,6 +42,7 @@ const AddDevice = ({
     data: { params, registrationTokens },
   },
 }) => {
+  const [copied, setCopied] = useState();
   const selectOptions = useMemo(
     () =>
       registrationTokens.map(token => ({
@@ -41,15 +52,22 @@ const AddDevice = ({
     []
   );
   const [selectValue, setSelectValue] = useState(() => {
-    const defaultToken = registrationTokens.find(
-      ({ name }) => name === 'default'
-    );
-    return defaultToken ? JSON.stringify(defaultToken) : null;
+    if (registrationTokens.length) {
+      const defaultToken = registrationTokens.find(
+        ({ name }) => name === 'default'
+      );
+      return defaultToken
+        ? JSON.stringify(defaultToken)
+        : JSON.stringify(registrationTokens[0]);
+    }
+    return null;
   });
   const selection = selectValue && JSON.parse(selectValue);
 
   useEffect(() => {
-    console.log(getLocalCommand(selection));
+    if (selection) {
+      console.log(getLocalCommand(selection));
+    }
   }, [selection]);
 
   return (
@@ -65,10 +83,40 @@ const AddDevice = ({
                 onChange={e => setSelectValue(e.target.value)}
               />
             </Group>
-            <Text marginBottom={2} fontWeight={1}>
-              Run the following command on the device you want to register:
-            </Text>
-            <Code>{getCommand(selection)}</Code>
+            {selection && (
+              <>
+                <Text marginBottom={2} fontWeight={1}>
+                  Run the following command on the device you want to register:
+                </Text>
+
+                <Code>{getCommand(selection)}</Code>
+                {navigator.clipboard && (
+                  <Button
+                    marginTop={4}
+                    title={
+                      <Row>
+                        <Icon
+                          icon={copied ? 'tick-circle' : 'clipboard'}
+                          color="black"
+                          position="absolute"
+                          left={2}
+                        />
+                        <Text color="inherit">
+                          {copied ? 'Copied!' : 'Copy to Clipboard'}
+                        </Text>
+                      </Row>
+                    }
+                    variant="primary"
+                    onClick={() =>
+                      navigator.clipboard
+                        .writeText(getCommand(selection))
+                        .then(() => setCopied(true))
+                        .then(() => setTimeout(() => setCopied(false), 1500))
+                    }
+                  />
+                )}
+              </>
+            )}
           </>
         ) : (
           <>

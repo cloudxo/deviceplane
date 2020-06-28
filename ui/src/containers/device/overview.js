@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useTable, useSortBy } from 'react-table';
 import parsePrometheusTextFormat from 'parse-prometheus-text-format';
 
@@ -26,7 +26,12 @@ import ServiceState, {
 } from '../../components/service-state';
 import { getMetricLabel } from '../../helpers/metrics';
 
-const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
+import storage from '../../storage';
+
+const ApplicationServices = ({ projectId, device, applicationStatusInfo }) => {
+  const [services, setServices] = useState([]);
+  const [showProgress, setShowProgress] = useState({});
+
   const getImagePullProgress = async ({ applicationId, serviceId }) => {
     try {
       const { data } = await api.imagePullProgress({
@@ -55,57 +60,78 @@ const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
       return [];
     }
 
-    return appStatusInfo.reduce(async (arr, info) => {
+    const newServices = [];
+
+    for (let i = 0; i < appStatusInfo.length; i++) {
+      const info = appStatusInfo[i];
       if (info.serviceStates && info.serviceStates.length) {
-        const services = await Promise.all(
-          info.serviceStates.map(async s => {
-            let imagePullProgress = null;
-            if (s.state === ServiceStatePullingImage) {
-              imagePullProgress = await getImagePullProgress({
-                applicationId: info.application.id,
-                serviceId: s.service,
-              });
-            }
-            return {
-              ...s,
-              currentRelease: {
-                number:
-                  info.serviceStatuses && info.serviceStatuses.length
-                    ? info.serviceStatuses[0].currentRelease.number
-                    : null,
-              },
-              imagePullProgress,
-              application: info.application,
-            };
-          })
-        );
-        return [...arr, ...services];
-      } else if (info.serviceStatuses && info.serviceStatuses.length) {
-        return [
-          ...arr,
-          ...info.serviceStatuses.map(s => ({
+        for (let j = 0; j < info.serviceStates.length; j++) {
+          const s = info.serviceStates[j];
+
+          newServices.push({
             ...s,
+            id: `${info.application.name} / ${s.service}`,
+            currentRelease: {
+              number:
+                info.serviceStatuses && info.serviceStatuses.length
+                  ? info.serviceStatuses[0].currentRelease.number
+                  : null,
+            },
             application: info.application,
-          })),
-        ];
-      } else {
-        return [];
+          });
+        }
+      } else if (info.serviceStatuses && info.serviceStatuses.length) {
+        info.serviceStatuses.forEach(s => {
+          newServices.push({
+            ...s,
+            id: `${info.application.name} / ${s.service}`,
+            application: info.application,
+          });
+        });
       }
-    }, []);
+    }
+    return newServices;
   };
 
-  const [services, setServices] = useState([]);
-  const [showProgress, setShowProgress] = useState({});
+  const servicesPolling = async () => {
+    const newServices = await getServices();
+    newServices.forEach(newService => {
+      setServices(services => {
+        const existingService = services.find(({ id }) => id === newService.id);
+        if (existingService) {
+          return services.map(s =>
+            s.id === newService.id
+              ? {
+                  ...s,
+                  ...newService,
+                }
+              : s
+          );
+        }
+        return [...services, newService];
+      });
+    });
 
-  const serviceEffect = async () => {
-    const services = await getServices();
-    setServices(services);
+    for (let i = 0; i < newServices.length; i++) {
+      const newService = newServices[i];
+      if (newService.state === ServiceStatePullingImage) {
+        const imagePullProgress = await getImagePullProgress({
+          applicationId: newService.application.id,
+          serviceId: newService.service,
+        });
+        setServices(services =>
+          services.map(s =>
+            s.id === newService.id ? { ...s, imagePullProgress } : s
+          )
+        );
+      }
+    }
+
+    setTimeout(servicesPolling, 5000);
   };
 
   useEffect(() => {
-    serviceEffect();
-    const serviceInterval = setInterval(serviceEffect, 2000);
-    return () => clearInterval(serviceInterval);
+    servicesPolling();
   }, []);
 
   const [serviceMetrics, setServiceMetrics] = useState({});
@@ -114,8 +140,7 @@ const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
     const cols = [];
     cols.push({
       Header: 'Service',
-      accessor: ({ application, service }) =>
-        `${application.name} / ${service}`,
+      accessor: 'id',
       Cell: ({ cell: { value }, row: { original } }) => (
         <Link href={`/${projectId}/applications/${original.application.name}`}>
           {value}
@@ -133,10 +158,9 @@ const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
         Cell: ({
           cell: { value },
           row: {
-            original: { application, service, imagePullProgress, errorMessage },
+            original: { service, imagePullProgress, errorMessage },
           },
         }) => {
-          const serviceId = `${application.name}:${service}`;
           let label = 'Pulling image';
           let layers = [];
           if (imagePullProgress) {
@@ -178,7 +202,7 @@ const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
                       title={
                         <Icon
                           icon={
-                            showProgress[serviceId]
+                            showProgress[service.id]
                               ? 'caret-down'
                               : 'caret-right'
                           }
@@ -189,13 +213,13 @@ const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
                       onClick={() =>
                         setShowProgress(sp => ({
                           ...sp,
-                          [serviceId]: !sp[serviceId],
+                          [service.id]: !sp[service.id],
                         }))
                       }
                       variant="icon"
                     />
                   </Row>
-                  <Column height={showProgress[serviceId] ? 'auto' : 0}>
+                  <Column height={showProgress[service.id] ? 'auto' : 0}>
                     {layers.map(({ id, status }) => (
                       <Text fontSize={0} marginTop={1}>
                         {id}: {status}
@@ -294,6 +318,7 @@ const DeviceServices = ({ projectId, device, applicationStatusInfo }) => {
           <Editor
             width="100%"
             height="70vh"
+            maxLines={30}
             value={serviceMetrics.metrics}
             readOnly
           />
@@ -338,25 +363,7 @@ const DeviceOverview = ({
             lastSeenAt={device.lastSeenAt}
           />
         }
-        marginBottom={5}
         actions={[
-          {
-            title: <Icon icon="pulse" size={18} color="primary" />,
-            variant: 'icon',
-            onClick: async () => {
-              try {
-                const { data } = await api.hostMetrics({
-                  projectId: params.project,
-                  deviceId: device.id,
-                });
-                setHostMetrics(parseMetrics(data));
-              } catch (error) {
-                toaster.danger('Current device metrics are unavailable.');
-                console.error(error);
-              }
-            },
-            disabled: device.status === 'offline',
-          },
           {
             title: 'Reboot',
             variant: 'secondary',
@@ -382,6 +389,7 @@ const DeviceOverview = ({
             href: `/${params.project}/ssh?devices=${device.name}`,
           },
         ]}
+        marginBottom={5}
       >
         <Group>
           <Label>Agent Version</Label>
@@ -411,6 +419,7 @@ const DeviceOverview = ({
           </Value>
         </Group>
       </Card>
+
       <EditableLabelTable
         data={device.labels}
         onAdd={label =>
@@ -429,33 +438,41 @@ const DeviceOverview = ({
         }
         marginBottom={5}
       />
-      <EditableLabelTable
-        title="Environment Variables"
-        dataName="Environment Variable"
-        data={device.environmentVariables}
-        onAdd={environmentVariable =>
-          api.addEnvironmentVariable({
-            projectId: params.project,
-            deviceId: device.id,
-            data: environmentVariable,
-          })
-        }
-        onRemove={key =>
-          api.removeEnvironmentVariable({
-            projectId: params.project,
-            deviceId: device.id,
-            key,
-          })
-        }
-        marginBottom={5}
-      />
-      <Card title="Services" size="xlarge">
-        <DeviceServices
-          projectId={params.project}
-          device={device}
-          applicationStatusInfo={device.applicationStatusInfo}
-        />
-      </Card>
+
+      {storage.get('legacy') ||
+        (false && (
+          <Card title="Application Services" size="xlarge" marginBottom={5}>
+            <ApplicationServices
+              projectId={params.project}
+              device={device}
+              applicationStatusInfo={device.applicationStatusInfo}
+            />
+          </Card>
+        ))}
+
+      {storage.get('legacy') ||
+        (false && (
+          <EditableLabelTable
+            title="Environment Variables"
+            dataName="Environment Variable"
+            data={device.environmentVariables}
+            onAdd={environmentVariable =>
+              api.addEnvironmentVariable({
+                projectId: params.project,
+                deviceId: device.id,
+                data: environmentVariable,
+              })
+            }
+            onRemove={key =>
+              api.removeEnvironmentVariable({
+                projectId: params.project,
+                deviceId: device.id,
+                key,
+              })
+            }
+          />
+        ))}
+
       <Popup show={!!hostMetrics} onClose={() => setHostMetrics(null)}>
         <Card
           border
@@ -470,6 +487,7 @@ const DeviceOverview = ({
             fontSize={12}
             mode="json"
             readOnly
+            maxLines={30}
           />
         </Card>
       </Popup>

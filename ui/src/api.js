@@ -15,18 +15,20 @@ const patch = (path, ...rest) => axios.patch(url(path), ...rest);
 const api = {
   login: ({ email, password }) => post('login', { email, password }),
 
+  loginSSO: data => post('loginsso', data),
+
   logout: () =>
     post('logout').then(() => {
       segment.reset();
     }),
 
-  signup: ({ email, password, firstName, lastName }) =>
+  signup: ({ email, password }) =>
     post(`register`, {
       email,
       password,
-      firstName,
-      lastName,
     }),
+
+  signupSSO: data => post('registersso', data),
 
   completeRegistration: ({ registrationTokenValue }) =>
     post('completeregistration', { registrationTokenValue }),
@@ -190,6 +192,25 @@ const api = {
       }
     ),
 
+  connections: ({ projectId }) => get(`projects/${projectId}/connections`),
+
+  connection: ({ projectId, connectionId }) =>
+    get(`projects/${projectId}/connections/${connectionId}`),
+
+  updateConnection: ({ projectId, connectionId, data }) =>
+    put(`projects/${projectId}/connections/${connectionId}`, data),
+
+  deleteConnection: ({ projectId, connectionId }) =>
+    del(`projects/${projectId}/connections/${connectionId}`),
+
+  createConnection: ({ projectId, data: { name, protocol, port } }) =>
+    post(`projects/${projectId}/connections`, { name, protocol, port }).then(
+      response => {
+        segment.track('Connection Created');
+        return response;
+      }
+    ),
+
   updateApplication: ({ projectId, applicationId, data }) =>
     patch(`projects/${projectId}/applications/${applicationId}`, data),
 
@@ -220,11 +241,13 @@ const api = {
   membership: ({ projectId, userId }) =>
     get(`projects/${projectId}/memberships/${userId}?full`),
 
-  addMember: ({ projectId, data: { email } }) =>
-    post(`projects/${projectId}/memberships`, { email }).then(response => {
-      segment.track('Member Added');
-      return response;
-    }),
+  addMember: ({ projectId, data: { email, userId } }) =>
+    post(`projects/${projectId}/memberships`, { email, userId }).then(
+      response => {
+        segment.track('Member Added');
+        return response;
+      }
+    ),
 
   removeMember: ({ projectId, userId }) =>
     del(`projects/${projectId}/memberships/${userId}`),

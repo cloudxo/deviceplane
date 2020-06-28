@@ -8,21 +8,32 @@ import (
 )
 
 type Users interface {
-	CreateUser(ctx context.Context, email, passwordHash, firstName, lastName string) (*models.User, error)
+	InitializeUser(ctx context.Context, internalUserID, externalUserID *string) (*models.User, error)
 	GetUser(ctx context.Context, id string) (*models.User, error)
-	LookupUser(ctx context.Context, email string) (*models.User, error)
-	ValidateUser(ctx context.Context, id, passwordHash string) (*models.User, error)
-	ValidateUserWithEmail(ctx context.Context, email, passwordHash string) (*models.User, error)
-	MarkRegistrationCompleted(ctx context.Context, id string) (*models.User, error)
-	UpdatePasswordHash(ctx context.Context, id, passwordHash string) (*models.User, error)
-	UpdateFirstName(ctx context.Context, id, firstName string) (*models.User, error)
-	UpdateLastName(ctx context.Context, id, lastName string) (*models.User, error)
+	GetUserByInternalID(ctx context.Context, internalUserID string) (*models.User, error)
+	GetUserByExternalID(ctx context.Context, externalUserID string) (*models.User, error)
+	UpdateUserName(ctx context.Context, id, name string) (*models.User, error)
+}
+
+type InternalUsers interface {
+	CreateInternalUser(ctx context.Context, email, passwordHash string) (*models.InternalUser, error)
+	GetInternalUser(ctx context.Context, id string) (*models.InternalUser, error)
+	LookupInternalUser(ctx context.Context, email string) (*models.InternalUser, error)
+	ValidateInternalUser(ctx context.Context, id, passwordHash string) (*models.InternalUser, error)
+	ValidateInternalUserWithEmail(ctx context.Context, email, passwordHash string) (*models.InternalUser, error)
+	UpdateInternalUserPasswordHash(ctx context.Context, id, passwordHash string) (*models.InternalUser, error)
+}
+
+type ExternalUsers interface {
+	CreateExternalUser(ctx context.Context, providerName, providerID, email string, info map[string]interface{}) (*models.ExternalUser, error)
+	GetExternalUser(ctx context.Context, id string) (*models.ExternalUser, error)
+	GetExternalUserByProviderID(ctx context.Context, providerName, providerID string) (*models.ExternalUser, error)
 }
 
 var ErrUserNotFound = errors.New("user not found")
 
 type RegistrationTokens interface {
-	CreateRegistrationToken(ctx context.Context, userID, hash string) (*models.RegistrationToken, error)
+	CreateRegistrationToken(ctx context.Context, internalUserID, hash string) (*models.RegistrationToken, error)
 	GetRegistrationToken(ctx context.Context, id string) (*models.RegistrationToken, error)
 	ValidateRegistrationToken(ctx context.Context, hash string) (*models.RegistrationToken, error)
 }
@@ -184,6 +195,18 @@ type DeviceAccessKeys interface {
 }
 
 var ErrDeviceAccessKeyNotFound = errors.New("device access key not found")
+
+type Connections interface {
+	CreateConnection(ctx context.Context, projectID, name string, protocol models.Protocol, port uint) (*models.Connection, error)
+	GetConnection(ctx context.Context, id, projectID string) (*models.Connection, error)
+	LookupConnection(ctx context.Context, name, projectID string) (*models.Connection, error)
+	ListConnections(ctx context.Context, projectID string) ([]models.Connection, error)
+	UpdateConnection(ctx context.Context, id, projectID, name string, protocol models.Protocol, port uint) (*models.Connection, error)
+	DeleteConnection(ctx context.Context, id, projectID string) error
+}
+
+var ErrConnectionNotFound = errors.New("connection not found")
+var ErrConnectionNameAlreadyInUse = errors.New("connection name already in use")
 
 type Applications interface {
 	CreateApplication(ctx context.Context, projectID, name, description string) (*models.Application, error)

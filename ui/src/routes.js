@@ -7,9 +7,19 @@ import { useNavigation } from 'react-navi';
 export default mount({
   '/': redirect('/projects'),
 
-  '/signup': route({
-    title: 'Sign Up',
-    getView: () => import('./containers/signup'),
+  '/signup': mount({
+    '/': route({
+      title: 'Sign Up',
+      getView: () => import('./containers/signup'),
+    }),
+    '/sso-callback': route({
+      title: 'SSO signup',
+      getData: (request, context) => ({
+        params: request.params,
+        context,
+      }),
+      getView: () => import('./containers/sso-callback'),
+    }),
   }),
   '/login': map(async (request, context) =>
     context.currentUser
@@ -18,13 +28,23 @@ export default mount({
             ? decodeURIComponent(request.params.redirectTo)
             : '/projects'
         )
-      : route({
-          title: 'Log In',
-          getData: (request, context) => ({
-            params: request.params,
-            context,
+      : mount({
+          '/': route({
+            title: 'Log In',
+            getData: (request, context) => ({
+              params: request.params,
+              context,
+            }),
+            getView: () => import('./containers/login'),
           }),
-          getView: () => import('./containers/login'),
+          '/sso-callback': route({
+            title: 'SSO login',
+            getData: (request, context) => ({
+              params: request.params,
+              context,
+            }),
+            getView: () => import('./containers/sso-callback'),
+          }),
         })
   ),
   '/forgot': route({
@@ -491,6 +511,39 @@ export default mount({
               ),
             })
           ),
+          '/connections': mount({
+            '/': route({
+              title: 'Connections',
+              getData: async request => {
+                const { data: connections } = await api.connections({
+                  projectId: request.params.project,
+                });
+                return {
+                  connections,
+                  params: request.params,
+                };
+              },
+              getView: () => import('./containers/connections'),
+            }),
+            '/:connection': route({
+              title: 'Connection',
+              getData: async request => {
+                const { data: connection } = await api.connection({
+                  projectId: request.params.project,
+                  connectionId: request.params.connection,
+                });
+                return {
+                  connection,
+                  params: request.params,
+                };
+              },
+              getView: () => import('./containers/connection'),
+            }),
+            '/create': route({
+              title: 'Create Connection',
+              getView: () => import('./containers/create-connection'),
+            }),
+          }),
           '/settings': route({
             title: 'Settings - Project',
             getData: async request => {

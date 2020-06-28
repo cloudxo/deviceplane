@@ -18,6 +18,8 @@ import (
 
 type Service struct {
 	users                      store.Users
+	internalUsers              store.InternalUsers
+	externalUsers              store.ExternalUsers
 	passwordRecoveryTokens     store.PasswordRecoveryTokens
 	registrationTokens         store.RegistrationTokens
 	userAccessKeys             store.UserAccessKeys
@@ -35,6 +37,7 @@ type Service struct {
 	deviceRegistrationTokens   store.DeviceRegistrationTokens
 	devicesRegisteredWithToken store.DevicesRegisteredWithToken
 	deviceAccessKeys           store.DeviceAccessKeys
+	connections                store.Connections
 	applications               store.Applications
 	applicationDeviceCounts    store.ApplicationDeviceCounts
 	releases                   store.Releases
@@ -47,15 +50,18 @@ type Service struct {
 	emailFromName              string
 	emailFromAddress           string
 	allowedEmailDomains        []string
+	auth0Domain                *url.URL
+	auth0Audience              string
 	st                         *statsd.Client
 	connman                    *connman.ConnectionManager
-
-	router   *mux.Router
-	upgrader websocket.Upgrader
+	router                     *mux.Router
+	upgrader                   websocket.Upgrader
 }
 
 func NewService(
 	users store.Users,
+	internalUsers store.InternalUsers,
+	externalUsers store.ExternalUsers,
 	registrationTokens store.RegistrationTokens,
 	passwordRecoveryTokens store.PasswordRecoveryTokens,
 	sessions store.Sessions,
@@ -73,6 +79,7 @@ func NewService(
 	deviceRegistrationTokens store.DeviceRegistrationTokens,
 	devicesRegisteredWithToken store.DevicesRegisteredWithToken,
 	deviceAccessKeys store.DeviceAccessKeys,
+	connections store.Connections,
 	applications store.Applications,
 	applicationDeviceCounts store.ApplicationDeviceCounts,
 	releases store.Releases,
@@ -85,6 +92,8 @@ func NewService(
 	emailFromName string,
 	emailFromAddress string,
 	allowedEmailDomains []string,
+	auth0Domain *url.URL,
+	auth0Audience string,
 	fileSystem http.FileSystem,
 	st *statsd.Client,
 	connman *connman.ConnectionManager,
@@ -92,6 +101,8 @@ func NewService(
 ) *Service {
 	s := &Service{
 		users:                      users,
+		internalUsers:              internalUsers,
+		externalUsers:              externalUsers,
 		registrationTokens:         registrationTokens,
 		passwordRecoveryTokens:     passwordRecoveryTokens,
 		sessions:                   sessions,
@@ -109,6 +120,7 @@ func NewService(
 		deviceRegistrationTokens:   deviceRegistrationTokens,
 		devicesRegisteredWithToken: devicesRegisteredWithToken,
 		deviceAccessKeys:           deviceAccessKeys,
+		connections:                connections,
 		applications:               applications,
 		applicationDeviceCounts:    applicationDeviceCounts,
 		releases:                   releases,
@@ -121,6 +133,8 @@ func NewService(
 		emailFromName:              emailFromName,
 		emailFromAddress:           emailFromAddress,
 		allowedEmailDomains:        allowedEmailDomains,
+		auth0Domain:                auth0Domain,
+		auth0Audience:              auth0Audience,
 		st:                         st,
 		connman:                    connman,
 
@@ -137,14 +151,16 @@ func NewService(
 
 	apiRouter := s.router.PathPrefix("/api").Subrouter()
 
-	apiRouter.HandleFunc("/register", s.register).Methods("POST")
+	apiRouter.HandleFunc("/register", s.registerInternalUser).Methods("POST")
+	apiRouter.HandleFunc("/registersso", s.registerExternalUser).Methods("POST")
 	apiRouter.HandleFunc("/completeregistration", s.confirmRegistration).Methods("POST")
 
-	apiRouter.HandleFunc("/changepassword", s.changePassword).Methods("POST")
+	apiRouter.HandleFunc("/changepassword", s.changeInternalUserPassword).Methods("POST")
 	apiRouter.HandleFunc("/recoverpassword", s.recoverPassword).Methods("POST")
 	apiRouter.HandleFunc("/passwordrecoverytokens/{passwordrecoverytokenvalue}", s.getPasswordRecoveryToken).Methods("GET")
 
-	apiRouter.HandleFunc("/login", s.login).Methods("POST")
+	apiRouter.HandleFunc("/login", s.loginInternalUser).Methods("POST")
+	apiRouter.HandleFunc("/loginsso", s.loginExternalUser).Methods("POST")
 	apiRouter.HandleFunc("/logout", s.logout).Methods("POST")
 
 	apiRouter.HandleFunc("/me", s.getMe).Methods("GET")
@@ -194,6 +210,12 @@ func NewService(
 	apiRouter.HandleFunc("/projects/{project}/serviceaccounts/{serviceaccount}/roles/{role}/serviceaccountrolebindings", s.getServiceAccountRoleBinding).Methods("GET")
 	apiRouter.HandleFunc("/projects/{project}/serviceaccounts/{serviceaccount}/roles/{role}/serviceaccountrolebindings", s.deleteServiceAccountRoleBinding).Methods("DELETE")
 
+	apiRouter.HandleFunc("/projects/{project}/connections", s.listConnections).Methods("GET")
+	apiRouter.HandleFunc("/projects/{project}/connections", s.createConnection).Methods("POST")
+	apiRouter.HandleFunc("/projects/{project}/connections/{connection}", s.getConnection).Methods("GET")
+	apiRouter.HandleFunc("/projects/{project}/connections/{connection}", s.updateConnection).Methods("PUT")
+	apiRouter.HandleFunc("/projects/{project}/connections/{connection}", s.deleteConnection).Methods("DELETE")
+
 	apiRouter.HandleFunc("/projects/{project}/applications", s.listApplications).Methods("GET")
 	apiRouter.HandleFunc("/projects/{project}/applications", s.createApplication).Methods("POST")
 	apiRouter.HandleFunc("/projects/{project}/applications/{application}", s.getApplication).Methods("GET")
@@ -210,8 +232,9 @@ func NewService(
 	apiRouter.HandleFunc("/projects/{project}/devices/previewscheduling/{application}", s.previewScheduledDevices).Methods("GET")
 	apiRouter.HandleFunc("/projects/{project}/devices/{device}", s.updateDevice).Methods("PATCH")
 	apiRouter.HandleFunc("/projects/{project}/devices/{device}", s.deleteDevice).Methods("DELETE")
-	apiRouter.HandleFunc("/projects/{project}/devices/{device}/ssh", s.initiateSSH).Methods("GET")
-	apiRouter.HandleFunc("/projects/{project}/devices/{device}/reboot", s.initiateReboot).Methods("POST")
+	apiRouter.HandleFunc("/projects/{project}/devices/{device}/ssh", s.ssh)
+	apiRouter.HandleFunc("/projects/{project}/devices/{device}/connect/{connection}", s.connectTCP)
+	apiRouter.HandleFunc("/projects/{project}/devices/{device}/reboot", s.reboot)
 	apiRouter.HandleFunc("/projects/{project}/devices/{device}/applications/{application}/services/{service}/imagepullprogress", s.imagePullProgress).Methods("GET")
 	apiRouter.HandleFunc("/projects/{project}/devices/{device}/metrics/host", s.hostMetrics).Methods("GET")
 	apiRouter.HandleFunc("/projects/{project}/devices/{device}/metrics/agent", s.agentMetrics).Methods("GET")

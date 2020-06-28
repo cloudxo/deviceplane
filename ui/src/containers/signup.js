@@ -9,13 +9,21 @@ import validators from '../validators';
 import Card from '../components/card';
 import Field from '../components/field';
 import Alert from '../components/alert';
-import { Column, Button, Form, Text, Link, toaster } from '../components/core';
+import Google from '../components/icons/google';
+import Github from '../components/icons/github';
+import {
+  Box,
+  Row,
+  Column,
+  Button,
+  Form,
+  Text,
+  Link,
+  toaster,
+} from '../components/core';
+import * as auth0 from '../lib/auth0';
 
 const validationSchema = yup.object().shape({
-  fullName: yup
-    .string()
-    .required()
-    .max(128),
   email: validators.email.required(),
   password: validators.password.required(),
 });
@@ -28,18 +36,6 @@ const Signup = () => {
   const [backendError, setBackendError] = useState();
 
   const submit = async data => {
-    const firstSpace = data.fullName.indexOf(' ');
-
-    if (firstSpace === -1) {
-      data.firstName = data.fullName;
-      data.lastName = ' ';
-    } else {
-      data.firstName = data.fullName.substr(0, firstSpace);
-      data.lastName = data.fullName.substr(firstSpace + 1);
-    }
-
-    delete data.fullName;
-
     try {
       const response = await api.signup(data);
       navigation.navigate('/login');
@@ -71,7 +67,9 @@ const Signup = () => {
         logo
         size="medium"
         title="Sign up"
-        actions={[{ href: '/login', title: 'Log in', variant: 'tertiary' }]}
+        actions={[
+          { href: '/login', title: 'Log in', variant: 'tertiaryGreen' },
+        ]}
       >
         <Alert show={backendError} variant="error" description={backendError} />
         <Form
@@ -80,17 +78,6 @@ const Signup = () => {
             handleSubmit(submit)(e);
           }}
         >
-          <Field
-            required
-            autoFocus
-            autoComplete="on"
-            autoCapitalize="on"
-            label="Full Name"
-            name="fullName"
-            ref={register}
-            errors={errors.fullName}
-            maxLength={128}
-          />
           <Field
             required
             autoComplete="on"
@@ -113,15 +100,64 @@ const Signup = () => {
           />
           <Button title="Sign up" justifyContent="center" />
         </Form>
+        <Text
+          textAlign="center"
+          marginTop={5}
+          marginBottom={3}
+          paddingTop={3}
+          borderTop={0}
+          borderColor="grays.5"
+        >
+          Sign up with
+        </Text>
+        <Row justifyContent="space-between">
+          <Button
+            variant="primaryGray"
+            flex={1}
+            marginRight={5}
+            title={
+              <Row
+                alignItems="center"
+                position="relative"
+                flex={1}
+                justifyContent="center"
+              >
+                <Box position="absolute" left={0}>
+                  <Google />
+                </Box>
+
+                <Text marginLeft={3} color="white" textAlign="center">
+                  Google
+                </Text>
+              </Row>
+            }
+            onClick={auth0.api.signup.google}
+          />
+          <Button
+            variant="primaryGray"
+            flex={1}
+            title={
+              <Row
+                alignItems="center"
+                position="relative"
+                flex={1}
+                justifyContent="center"
+              >
+                <Box position="absolute" left={0}>
+                  <Github />
+                </Box>
+                <Text marginLeft={3} color="white" textAlign="center">
+                  Github
+                </Text>
+              </Row>
+            }
+            onClick={auth0.api.signup.github}
+          />
+        </Row>
         <Text marginTop={5} fontSize={1} fontWeight={0}>
           By signing up you agree to the{' '}
-          <Link href="https://deviceplane.com/legal/terms">
-            Terms of Service
-          </Link>{' '}
-          and{' '}
-          <Link href="https://deviceplane.com/legal/privacy">
-            Privacy Policy
-          </Link>
+          <Link href="https://deviceplane.com/terms">Terms of Service</Link> and{' '}
+          <Link href="https://deviceplane.com/privacy">Privacy Policy</Link>
         </Text>
       </Card>
     </Column>

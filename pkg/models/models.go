@@ -5,26 +5,45 @@ import (
 )
 
 type User struct {
-	ID                    string    `json:"id" yaml:"id"`
-	CreatedAt             time.Time `json:"createdAt" yaml:"createdAt"`
-	Email                 string    `json:"email" yaml:"email"`
-	FirstName             string    `json:"firstName" yaml:"firstName"`
-	LastName              string    `json:"lastName" yaml:"lastName"`
-	RegistrationCompleted bool      `json:"registrationCompleted" yaml:"registrationCompleted"`
-	SuperAdmin            bool      `json:"superAdmin" yaml:"superAdmin"`
+	ID             string    `json:"id" yaml:"id"`
+	CreatedAt      time.Time `json:"createdAt" yaml:"createdAt"`
+	Name           string    `json:"name" yaml:"name"`
+	InternalUserID *string   `json:"-" yaml:"-"`
+	ExternalUserID *string   `json:"-" yaml:"-"`
+	SuperAdmin     bool      `json:"superAdmin" yaml:"superAdmin"`
+}
+
+type UserFull struct {
+	User
+	ProviderName string `json:"providerName,omitempty"`
+	ProviderID   string `json:"providerId,omitempty"`
+	Email        string `json:"email"`
+}
+
+type ExternalUser struct {
+	ID           string
+	ProviderName string
+	ProviderID   string
+	Email        string
+	Info         map[string]interface{}
+}
+
+type InternalUser struct {
+	ID    string
+	Email string
 }
 
 type RegistrationToken struct {
-	ID        string    `json:"id" yaml:"id"`
-	CreatedAt time.Time `json:"createdAt" yaml:"createdAt"`
-	UserID    string    `json:"userId" yaml:"userId"`
+	ID             string
+	CreatedAt      time.Time
+	InternalUserID string
 }
 
 type PasswordRecoveryToken struct {
-	ID        string    `json:"id" yaml:"id"`
-	CreatedAt time.Time `json:"createdAt" yaml:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt" yaml:"expiresAt"`
-	UserID    string    `json:"userId" yaml:"userId"`
+	ID             string
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+	InternalUserID string
 }
 
 type Session struct {
@@ -153,6 +172,22 @@ type DeviceAccessKey struct {
 	DeviceID  string    `json:"deviceId" yaml:"deviceId"`
 }
 
+type Connection struct {
+	ID        string    `json:"id" yaml:"id"`
+	CreatedAt time.Time `json:"createdAt" yaml:"createdAt"`
+	ProjectID string    `json:"projectId" yaml:"projectId"`
+	Name      string    `json:"name" yaml:"name"`
+	Protocol  Protocol  `json:"protocol" yaml:"protocol"`
+	Port      uint      `json:"port" yaml:"port"`
+}
+
+type Protocol string
+
+const (
+	ProtocolTCP  = Protocol("tcp")
+	ProtocolHTTP = Protocol("http")
+)
+
 type Application struct {
 	ID                    string                          `json:"id" yaml:"id"`
 	CreatedAt             time.Time                       `json:"createdAt" yaml:"createdAt"`
@@ -253,8 +288,8 @@ type ProjectFull struct {
 
 type MembershipFull2 struct {
 	Membership
-	User  User   `json:"user" yaml:"user"`
-	Roles []Role `json:"roles" yaml:"roles"`
+	User  UserFull `json:"user" yaml:"user"`
+	Roles []Role   `json:"roles" yaml:"roles"`
 }
 
 type ServiceAccountFull struct {
@@ -310,6 +345,7 @@ type Bundle struct {
 	ServiceStates       []DeviceServiceState      `json:"serviceStates" yaml:"serviceStates"`
 
 	DeviceID             string            `json:"deviceId" yaml:"deviceId"`
+	DeviceName           string            `json:"deviceName" yaml:"deviceName"`
 	EnvironmentVariables map[string]string `json:"environmentVariables" yaml:"environmentVariables"`
 	DesiredAgentVersion  string            `json:"desiredAgentVersion" yaml:"desiredAgentVersion"`
 

@@ -67,6 +67,21 @@ var (
 	smtpPassword = kingpin.
 			Flag("smtp-password", "").
 			String()
+	dbMaxOpenConns = kingpin.
+			Flag("db-max-open-conns", "50").
+			Int()
+	dbMaxIdleConns = kingpin.
+			Flag("db-max-idle-conns", "25").
+			Int()
+	dbMaxConnLifetime = kingpin.
+				Flag("db-max-conn-lifetime", "60m").
+				Duration()
+	auth0Domain = kingpin.
+			Flag("auth0-domain", "").
+			URL()
+	auth0Audience = kingpin.
+			Flag("auth0-audience", "").
+			String()
 )
 
 func main() {
@@ -110,9 +125,12 @@ func main() {
 	})
 	runnerManager.Start()
 
-	svc := service.NewService(sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore,
-		sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore,
-		emailProvider, *emailFromName, *emailFromAddress, *allowedEmailDomains, statikFS, st, connman, allowedOriginURLs)
+	svc := service.NewService(sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore,
+		sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore,
+		sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore, sqlStore,
+		emailProvider, *emailFromName, *emailFromAddress, *allowedEmailDomains,
+		*auth0Domain, *auth0Audience,
+		statikFS, st, connman, allowedOriginURLs)
 
 	server := &http.Server{
 		Addr: *addr,
@@ -151,6 +169,10 @@ func tryConnect(uri string) (*sql.DB, error) {
 		log.Info("connected to db")
 		break
 	}
+
+	db.SetMaxOpenConns(*dbMaxOpenConns)
+	db.SetMaxIdleConns(*dbMaxIdleConns)
+	db.SetConnMaxLifetime(*dbMaxConnLifetime)
 
 	return db, err
 }

@@ -66,7 +66,7 @@ func deviceListAction(c *kingpin.ParseContext) error {
 }
 
 func deviceRebootAction(c *kingpin.ParseContext) error {
-	err := config.APIClient.RebootDevice(context.TODO(), *config.Flags.Project, *deviceArg)
+	err := config.APIClient.Reboot(context.TODO(), *config.Flags.Project, *deviceArg)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func deviceInspectAction(c *kingpin.ParseContext) error {
 }
 
 func deviceSSHAction(c *kingpin.ParseContext) error {
-	conn, err := config.APIClient.InitiateSSH(context.TODO(), *config.Flags.Project, *deviceArg)
+	conn, err := config.APIClient.SSH(context.TODO(), *config.Flags.Project, *deviceArg)
 	if err != nil {
 		return err
 	}

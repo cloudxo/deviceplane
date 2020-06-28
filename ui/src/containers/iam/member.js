@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigation } from 'react-navi';
 import * as yup from 'yup';
 
 import api from '../../api';
+import useToggle from '../../hooks/useToggle';
 import Card from '../../components/card';
 import Popup from '../../components/popup';
 import Field from '../../components/field';
@@ -30,7 +31,7 @@ const Member = ({
       ),
     },
   });
-  const [showRemovePopup, setShowRemovePopup] = useState();
+  const [isRemovePopup, toggleRemovePopup] = useToggle();
   const navigation = useNavigation();
 
   const removeMember = async () => {
@@ -93,13 +94,13 @@ const Member = ({
   return (
     <>
       <Card
-        title={`${member.user.firstName} ${member.user.lastName}`}
+        title={member.user.name}
         subtitle={member.user.email}
         size="large"
         actions={[
           {
             title: 'Remove',
-            onClick: () => setShowRemovePopup(true),
+            onClick: toggleRemovePopup,
             variant: 'danger',
           },
         ]}
@@ -126,17 +127,14 @@ const Member = ({
         </Form>
       </Card>
       <Popup
-        show={showRemovePopup}
+        show={isRemovePopup}
         title="Remove Member"
-        onClose={() => setShowRemovePopup(false)}
+        onClose={toggleRemovePopup}
       >
         <Card title="Remove Member" border size="large">
           <Text>
             You are about to remove the member (
-            <strong>
-              {member.user.firstName} {member.user.lastName}
-            </strong>
-            ) from the project.
+            <strong>{member.user.name}</strong>) from the project.
           </Text>
           <Button
             marginTop={5}

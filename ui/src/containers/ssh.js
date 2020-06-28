@@ -1,4 +1,11 @@
-import React, { useEffect, useState, useRef, useMemo, Fragment } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  Fragment,
+  useCallback,
+} from 'react';
 import styled from 'styled-components';
 import { useTable, useSortBy, useRowSelect } from 'react-table';
 import { Terminal as XTerm } from 'xterm';
@@ -133,9 +140,8 @@ const Tab = styled(Row).attrs({ as: 'button' })`
 const Session = ({ project, device, privateKey, show }) => {
   const terminalNode = useRef();
   const client = useRef(new Client()).current;
-  const term = useRef(
-    new XTerm({ cursorStyle: 'bar', cursorWidth: '3', cursorBlink: true })
-  ).current;
+  const term = useRef(new XTerm({ cursorStyle: 'block', cursorBlink: true }))
+    .current;
   const fitAddon = useRef(new FitAddon()).current;
 
   const startSSH = () => {
@@ -166,7 +172,9 @@ const Session = ({ project, device, privateKey, show }) => {
               term.write(data.toString());
             });
           term.onData(data => {
-            stream.write(data);
+            if (stream.writable) {
+              stream.write(data);
+            }
           });
           term.onResize(({ rows, cols }) => {
             const {
@@ -235,12 +243,13 @@ const Session = ({ project, device, privateKey, show }) => {
 };
 
 const SessionTabs = ({ device, setActiveSession, deleteSession }) => {
+  const hotkey = window.navigator.userAgent.includes('Mac OS') ? '⌘' : '^';
   if (device && device.sessions) {
     return (
       <Tabs>
         {device.sessions.map(({ active }, i) => (
           <Tab key={i} active={active} onClick={() => setActiveSession(i)}>
-            <Text color="inherit">{i + 1}</Text>
+            <Text color="inherit">{i < 9 ? `${hotkey} ${i + 1}` : i + 1}</Text>
             <CloseButton
               marginLeft={2}
               onClick={e => {
@@ -274,96 +283,10 @@ const SSH = ({
         }))
       : []
   );
-  const sshKeys = storage.get('sshKeys');
-  const enableSSHKeys = storage.get('enableSSHKeys', params.project);
-  const selectOptions = sshKeys
-    ? sshKeys.map(({ name, key }) => ({ label: name, value: key }))
-    : null;
-  const [isKeyPopupVisible, setKeyPopupVisible] = useState(
-    enableSSHKeys && selectOptions
-  );
   const [isDevicesTableVisible, setDevicesTableVisible] = useState();
   const [searchInput, setSearchInput] = useState('');
   const [searchFocused, setSearchFocused] = useState();
   const [privateKey, setPrivateKey] = useState();
-
-  useEffect(() => {
-    setTimeout(() => {
-      const intercomNode = document.querySelector('#intercom-container');
-      if (intercomNode) {
-        intercomNode.style.display = 'none';
-        return () => {
-          intercomNode.style.display = 'block';
-        };
-      }
-    }, 500);
-  }, []);
-
-  const fetchDevices = async () => {
-    try {
-      const { data } = await api.devices({
-        projectId: params.project,
-        queryString: `?search=${searchInput}`,
-      });
-      setAllDevices(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  useEffect(() => {
-    if (devices.length === 0) {
-      window.close();
-    } else {
-      window.history.replaceState(
-        null,
-        null,
-        `?devices=${devices.map(({ name }) => name).join(',')}`
-      );
-    }
-  }, [devices]);
-
-  useEffect(() => {
-    fetchDevices();
-  }, [searchInput]);
-
-  const columns = useMemo(
-    () => [
-      SelectColumn,
-      {
-        Header: 'Name',
-        accessor: 'name',
-        minWidth: '200px',
-      },
-      {
-        Header: 'Labels',
-        accessor: 'labels',
-        Cell: ({ cell: { value } }) =>
-          value ? <Row marginBottom={-2}>{renderLabels(value)}</Row> : null,
-        minWidth: '300px',
-        maxWidth: '2fr',
-      },
-    ],
-    []
-  );
-
-  const tableData = useMemo(
-    () =>
-      allDevices.filter(
-        ({ status, name }) =>
-          status === 'online' && !devices.find(device => device.name === name)
-      ),
-    [allDevices, devices]
-  );
-
-  const { selectedFlatRows, ...tableProps } = useTable(
-    {
-      columns,
-      data: tableData,
-    },
-    useSortBy,
-    useRowSelect
-  );
 
   const deleteDevice = name =>
     setDevices(devices => {
@@ -478,6 +401,107 @@ const SSH = ({
     ]);
   };
 
+  useEffect(() => {
+    setTimeout(() => {
+      const intercomNode = document.querySelector('#intercom-container');
+      if (intercomNode) {
+        intercomNode.style.display = 'none';
+        return () => {
+          intercomNode.style.display = 'block';
+        };
+      }
+    }, 500);
+  }, []);
+
+  const fetchDevices = async () => {
+    try {
+      const { data } = await api.devices({
+        projectId: params.project,
+        queryString: `?search=${searchInput}`,
+      });
+      setAllDevices(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeydown = event => {
+      if (
+        event.key >= 1 &&
+        event.key <= 9 &&
+        (event.metaKey || event.ctrlKey)
+      ) {
+        if (
+          devices.find(d => {
+            return d.active && d.sessions.length >= event.key;
+          })
+        ) {
+          setActiveSession(event.key - 1);
+        }
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [devices]);
+
+  useEffect(() => {
+    if (devices.length === 0) {
+      window.close();
+    } else {
+      window.history.replaceState(
+        null,
+        null,
+        `?devices=${devices.map(({ name }) => name).join(',')}`
+      );
+    }
+  }, [devices]);
+
+  useEffect(() => {
+    fetchDevices();
+  }, [searchInput]);
+
+  const columns = useMemo(
+    () => [
+      SelectColumn,
+      {
+        Header: 'Name',
+        accessor: 'name',
+        minWidth: '200px',
+      },
+      {
+        Header: 'Labels',
+        accessor: 'labels',
+        Cell: ({ cell: { value } }) =>
+          value ? <Row marginBottom={-2}>{renderLabels(value)}</Row> : null,
+        minWidth: '300px',
+        maxWidth: '2fr',
+      },
+    ],
+    []
+  );
+
+  const tableData = useMemo(
+    () =>
+      allDevices.filter(
+        ({ status, name }) =>
+          status === 'online' && !devices.find(device => device.name === name)
+      ),
+    [allDevices, devices]
+  );
+
+  const { selectedFlatRows, ...tableProps } = useTable(
+    {
+      columns,
+      data: tableData,
+    },
+    useSortBy,
+    useRowSelect
+  );
+
   return (
     <>
       <Container>
@@ -578,7 +602,6 @@ const SSH = ({
               />
               <Input
                 flex={1}
-                bg="black"
                 placeholder="Search devices by name or labels"
                 paddingLeft={7}
                 value={searchInput}
@@ -607,26 +630,6 @@ const SSH = ({
                 There are no eligible <strong>Devices</strong>.
               </Text>
             }
-          />
-        </Card>
-      </Popup>
-
-      <Popup
-        show={isKeyPopupVisible}
-        onClose={() => {
-          setKeyPopupVisible(false);
-          startSSH();
-        }}
-      >
-        <Card border size="medium">
-          <Select
-            onChange={e => {
-              setKeyPopupVisible(false);
-              setPrivateKey(e.target.value);
-            }}
-            options={selectOptions}
-            placeholder="Select a SSH key"
-            none="There are no SSH keys"
           />
         </Card>
       </Popup>
